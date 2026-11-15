@@ -48,7 +48,7 @@ function taskCard(row, now, handlers) {
     el('p', { class: 'task-meta', text: meta }),
     el('div', { class: 'task-actions' }, [
       el('button', { class: 'btn btn-done', type: 'button', text: '✓ בוצע', onclick: () => handlers.onDone(row) }),
-      due != null && el('button', {
+      due != null && handlers.onCalendar && el('button', {
         class: 'btn', type: 'button', text: 'ליומן', 'aria-label': 'הוסף ליומן', onclick: () => handlers.onCalendar(row),
       }),
       row.link && el('a', { class: 'btn', href: row.link, target: '_blank', rel: 'noopener', text: 'פתח' }),
@@ -104,7 +104,7 @@ function inboxPanel(inbox, onDismiss) {
   ]);
 }
 
-export function tasksScreen({ tasks, history, mode, now, notice, inbox, handlers }) {
+export function tasksScreen({ tasks, history, mode, now, notice, inbox, links, handlers }) {
   const title = tasks.length === 0
     ? [document.createTextNode('אין מטלות פתוחות')]
     : [el('span', { class: 'count', text: String(tasks.length) }), document.createTextNode(tasks.length === 1 ? ' מטלה פתוחה' : ' מטלות פתוחות')];
@@ -117,6 +117,7 @@ export function tasksScreen({ tasks, history, mode, now, notice, inbox, handlers
     : el('ul', { class: 'task-list' }, history.map((item) => historyCard(item, handlers)));
 
   return [
+    links, // quick links first, where the app has them on this screen
     pageHead(todayFormatter.format(new Date(now)), title),
     notice && el('p', { class: 'banner', text: notice }),
     inbox.length > 0 && inboxPanel(inbox, handlers.onDismissInbox),
@@ -290,7 +291,7 @@ function pushPanel(push, handlers) {
   ]);
 }
 
-export function settingsScreen({ courses, hiddenCourses, email, lastUpdated, demo, push, handlers }) {
+export function settingsScreen({ courses, hiddenCourses, email, lastUpdated, demo, push, extraPanels = [], handlers }) {
   const hidden = new Set(hiddenCourses);
   const courseRows = courses.map((name) => el('label', { class: 'course-row' }, [
     el('input', {
@@ -303,6 +304,7 @@ export function settingsScreen({ courses, hiddenCourses, email, lastUpdated, dem
 
   return [
     pageHead('הגדרות', [document.createTextNode('מה להציג')]),
+    ...extraPanels,
     pushPanel(push, handlers),
     el('section', { class: 'panel' }, [
       el('h2', { text: 'קורסים' }),

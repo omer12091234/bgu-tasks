@@ -538,6 +538,14 @@ html, body { overflow-x: hidden; }
 
 .quick-links { display: flex; flex-wrap: wrap; gap: 8px; }
 .quick-links .btn { text-decoration: none; }
+#app > .quick-links { margin-block-end: 18px; }
+.link-chip { min-height: 36px; padding-inline: 14px; font-size: 0.88rem; }
+.link-chip-quiet { margin-inline-start: auto; border-style: dashed; color: var(--ink-soft); }
+
+.link-rows { margin: 0 0 12px; padding: 0; list-style: none; }
+.link-rows li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; border-block-start: 1px solid var(--line); }
+.link-rows a { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-form { display: grid; gap: 10px; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }

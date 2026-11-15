@@ -9,6 +9,8 @@ import { dayKey } from './lib/time.js';
 import { tasksScreen, calendarScreen, settingsScreen, loginScreen, taskDialog, tabBar, el } from './ui.js';
 import { progressScreen } from './ui-progress.js';
 import { statsScreen } from './ui-stats.js';
+import { linksBar, linksEditor } from './ui-links.js';
+import { normalizeLink, addLink, removeLink, readCustomLinks, saveCustomLinks } from './links.js';
 import { pushSupport, currentSubscription, subscribe, unsubscribe, SUPPORT_OK } from './push.js';
 import { readInbox, clearInbox } from './inbox.js';
 import { isExtension } from './session-store.js';
@@ -24,6 +26,9 @@ const urlParams = new URLSearchParams(location.search);
 const isDemo = urlParams.has('demo');
 const NOTIFICATION_PARAM = 'n'; // set by the service worker when a notification is tapped
 const inExtension = isExtension(); // running as the Chrome extension's popup
+const FULL_PAGE_PARAM = 'full';    // the extension opened as a whole tab instead of the small popup
+const isFullPage = inExtension && urlParams.has(FULL_PAGE_PARAM);
+if (isFullPage) document.documentElement.classList.add('full-page');
 const store = isDemo ? createDemoStore() : createRemoteStore();
 await api.init();
 const appNode = document.getElementById('app');
@@ -51,6 +56,8 @@ let state = {
   inbox: [],                                              // notifications received on this phone
   highlightId: urlParams.get(NOTIFICATION_PARAM) || null, // task a tapped notification points at
   loginError: null,
+  links: readCustomLinks(), // the user's own quick links, kept on this device
+  linkError: null,
   busy: false,
   lastUpdated: null,
 };
@@ -302,8 +309,48 @@ function showToast(message, actionLabel, onAction) {
   toastTimer = setTimeout(hide, UNDO_WINDOW_MS);
 }
 
+// ---------- quick links ----------
+
+function setLinks(links) {
+  try {
+    saveCustomLinks(links);
+    setState({ links, linkError: null });
+  } catch (err) {
+    setState({ linkError: `הקישור לא נשמר: ${err.message}` });
+  }
+}
+
+function addCustomLink(fields) {
+  const result = normalizeLink(fields);
+  if (result.error) {
+    setState({ linkError: result.error });
+    return;
+  }
+  setLinks(addLink(state.links, result.link));
+}
+
+/** In the extension the links sit above the tasks, with a way out of the small popup. */
+function extensionLinksBar() {
+  const fullPage = !isFullPage && el('a', {
+    class: 'btn link-chip link-chip-quiet', href: `popup.html?${FULL_PAGE_PARAM}`, target: '_blank', rel: 'noopener', text: '⤢ מסך מלא',
+  });
+  return linksBar(state.links, [fullPage]);
+}
+
+function extensionPanel() {
+  return el('section', { class: 'panel' }, [
+    el('h2', { text: 'התוסף' }),
+    el('p', { text: 'פרטי ההתחברות למודל ולגזר, והיכולות שפעילות בדפי המודל.' }),
+    el('div', { class: 'quick-links' }, [
+      el('a', { class: 'btn', href: 'options.html', target: '_blank', rel: 'noopener', text: 'הגדרות התחברות למודל' }),
+      !isFullPage && el('a', { class: 'btn', href: `popup.html?${FULL_PAGE_PARAM}`, target: '_blank', rel: 'noopener', text: 'פתח בכרטיסייה מלאה' }),
+    ]),
+  ]);
+}
+
 function currentScreen() {
-  const taskHandlers = { onDone: markDone, onCalendar: addToCalendar, onDelete: deleteTask, highlightId: state.highlightId };
+  // The extension lives next to a real calendar app less often than the phone: no "add to calendar" there.
+  const taskHandlers = { onDone: markDone, onCalendar: inExtension ? null : addToCalendar, onDelete: deleteTask, highlightId: state.highlightId };
   const now = Date.now();
 
   if (state.view === 'calendar') {
@@ -342,6 +389,7 @@ function currentScreen() {
       tasks: state.data.tasks,
       submissions: state.data.submissions,
       now,
+      customLinks: inExtension ? null : state.links,
     });
   }
   if (state.view === 'settings') {
@@ -353,6 +401,10 @@ function currentScreen() {
       lastUpdated: state.lastUpdated,
       demo: isDemo,
       push: state.push,
+      extraPanels: [
+        inExtension && extensionPanel(),
+        linksEditor({ custom: state.links, error: state.linkError, onAdd: addCustomLink, onRemove: (url) => setLinks(removeLink(state.links, url)) }),
+      ],
       handlers: { onToggleCourse: toggleCourse, onRefresh: refresh, onSignOut: signOut, onTogglePush: togglePush },
     });
   }
@@ -364,6 +416,7 @@ function currentScreen() {
     now,
     notice: state.notice || demoNotice,
     inbox: state.inbox,
+    links: inExtension ? extensionLinksBar() : null,
     handlers: {
       ...taskHandlers,
       onDismissInbox: dismissInbox,

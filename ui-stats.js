@@ -2,17 +2,11 @@
 // done. The numbers come from lib/stats.js; this file only draws them.
 
 import { el, pageHead } from './ui.js';
+import { linksBar } from './ui-links.js';
 import {
   weekTotals, streak, heatmap, secondsByCourse, videoSummary, taskCompletion, deadlineScore, formatDuration,
 } from './lib/stats.js';
 
-const QUICK_LINKS = [
-  { label: 'מודל', url: 'https://moodle.bgu.ac.il/moodle/my/' },
-  { label: 'פורטל', url: 'https://portal.bgu.ac.il/public/login' },
-  { label: 'גזר', url: 'https://gezer1.bgu.ac.il/meser/main.php' },
-  { label: 'מנהל תלמידים', url: 'https://bgu4u22.bgu.ac.il/apex/10g/r/f_login1004/login_desktop?p_lang=he' },
-  { label: 'הרשמה לקורסים', url: 'https://bgu4u.bgu.ac.il/pls/scwp/!app.gate?app=cns' },
-];
 const DAY_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
 const MAX_UNFINISHED = 5;
 const MAX_COURSES = 8;
@@ -86,19 +80,18 @@ function videoPanel(videos) {
   ]);
 }
 
-function linksPanel() {
+function linksPanel(customLinks) {
   return el('section', { class: 'panel' }, [
     el('h2', { text: 'קישורים מהירים' }),
-    el('div', { class: 'quick-links' }, QUICK_LINKS.map((link) => el('a', {
-      class: 'btn', href: link.url, target: '_blank', rel: 'noopener', text: link.label,
-    }))),
+    linksBar(customLinks),
   ]);
 }
 
 /**
- * @param {{ study: object[], watched: object[], times: object[], tasks: object[], submissions: object[], now: number }} input
+ * @param {{ study: object[], watched: object[], times: object[], tasks: object[], submissions: object[], now: number,
+ *   customLinks: object[]|null }} input  customLinks: null where the links are shown on the tasks screen instead
  */
-export function statsScreen({ study, watched, times, tasks, submissions, now }) {
+export function statsScreen({ study, watched, times, tasks, submissions, now, customLinks }) {
   const week = weekTotals(study, now);
   const videos = videoSummary(watched, times);
   const completion = taskCompletion(tasks);
@@ -117,6 +110,6 @@ export function statsScreen({ study, watched, times, tasks, submissions, now }) 
     heatmapPanel(heatmap(study, now)),
     coursePanel(secondsByCourse(study)),
     videoPanel(videos),
-    linksPanel(),
+    customLinks && linksPanel(customLinks),
   ];
 }
