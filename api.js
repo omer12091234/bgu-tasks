@@ -108,10 +108,10 @@ export async function selectAll(table, filter = '') {
   return request(`/rest/v1/${table}?select=*${filter ? `&${filter}` : ''}`, { token });
 }
 
-/** Insert a row, or replace the row with the same id. */
-export async function upsert(table, row) {
+/** Insert a row, or replace the row that has the same value in `conflictColumn`. */
+export async function upsert(table, row, conflictColumn = 'id') {
   const token = await accessToken();
-  await request(`/rest/v1/${table}?on_conflict=id`, {
+  await request(`/rest/v1/${table}?on_conflict=${conflictColumn}`, {
     method: 'POST',
     token,
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
@@ -128,4 +128,10 @@ export async function patch(table, id, fields) {
     headers: { Prefer: 'return=minimal' },
     body: fields,
   });
+}
+
+/** Delete the rows matching a PostgREST filter such as `endpoint=eq.<value>`. */
+export async function remove(table, filter) {
+  const token = await accessToken();
+  await request(`/rest/v1/${table}?${filter}`, { method: 'DELETE', token, headers: { Prefer: 'return=minimal' } });
 }

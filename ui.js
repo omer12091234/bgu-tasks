@@ -190,7 +190,33 @@ export function calendarScreen({ tasks, now, view, handlers }) {
   ];
 }
 
-export function settingsScreen({ courses, hiddenCourses, email, lastUpdated, demo, handlers }) {
+const PUSH_MESSAGES = {
+  'needs-install': 'באייפון התראות עובדות רק מהאפליקציה שבמסך הבית: ב-Safari ללחוץ על שיתוף, "הוסף למסך הבית", ולפתוח משם.',
+  denied: 'ההתראות חסומות בהגדרות המכשיר. אפשר לאפשר אותן שם ולחזור לכאן.',
+  unsupported: 'הדפדפן הזה לא תומך בהתראות.',
+  demo: 'לא זמין במצב הדגמה.',
+};
+
+function pushPanel(push, handlers) {
+  const blocked = PUSH_MESSAGES[push.support];
+  const status = blocked || (push.enabled
+    ? 'פעיל במכשיר הזה: יום לפני הגשה, סיכום בוקר, וכשעולה מטלה חדשה.'
+    : 'כבוי במכשיר הזה.');
+  return el('section', { class: 'panel' }, [
+    el('h2', { text: 'התראות' }),
+    el('p', { text: status }),
+    push.error && el('p', { class: 'error', role: 'alert', text: push.error }),
+    !blocked && el('button', {
+      class: push.enabled ? 'btn' : 'btn btn-primary',
+      type: 'button',
+      disabled: push.busy,
+      text: push.busy ? 'רגע…' : (push.enabled ? 'כבה התראות' : 'הפעל התראות'),
+      onclick: () => handlers.onTogglePush(!push.enabled),
+    }),
+  ]);
+}
+
+export function settingsScreen({ courses, hiddenCourses, email, lastUpdated, demo, push, handlers }) {
   const hidden = new Set(hiddenCourses);
   const courseRows = courses.map((name) => el('label', { class: 'course-row' }, [
     el('input', {
@@ -203,9 +229,10 @@ export function settingsScreen({ courses, hiddenCourses, email, lastUpdated, dem
 
   return [
     pageHead('הגדרות', [document.createTextNode('מה להציג')]),
+    pushPanel(push, handlers),
     el('section', { class: 'panel' }, [
       el('h2', { text: 'קורסים' }),
-      el('p', { text: 'בטל סימון כדי להסתיר את המטלות של קורס מהרשימה ומלוח השנה.' }),
+      el('p', { text: 'בטל סימון כדי להסתיר קורס: המטלות שלו לא יופיעו ברשימה, בלוח השנה או בהתראות.' }),
       ...(courseRows.length ? courseRows : [el('p', { text: 'עדיין אין קורסים עם מטלות.' })]),
     ]),
     el('section', { class: 'panel' }, [

@@ -103,6 +103,9 @@ export function createRemoteStore() {
       cells = [...cells.filter((other) => other.id !== row.id), row];
       return row;
     },
+    // One row per device that should receive notifications.
+    saveDevice: (device) => api.upsert('push_subscriptions', { user_id: userId(), ...device }, 'endpoint'),
+    removeDevice: (endpoint) => api.remove('push_subscriptions', `endpoint=eq.${encodeURIComponent(endpoint)}`),
   };
 }
 
@@ -134,5 +137,7 @@ export function createDemoStore() {
       data = { ...data, cells: [...data.cells.filter((other) => other.id !== row.id), row] };
       return row;
     },
+    saveDevice: async () => {},
+    removeDevice: async () => {},
   };
 }

@@ -8,6 +8,7 @@ import { buildIcs, icsFileName } from './lib/ics.js';
 import { dayKey } from './lib/time.js';
 import { tasksScreen, calendarScreen, settingsScreen, loginScreen, taskDialog, tabBar, el } from './ui.js';
 import { progressScreen } from './ui-progress.js';
+import { pushSupport, currentSubscription, subscribe, unsubscribe, SUPPORT_OK } from './push.js';
 
 const HIDDEN_COURSES_KEY = 'bgu-tasks.hiddenCourses';
 const DATA_CACHE_KEY = 'bgu-tasks.data';
@@ -37,7 +38,7 @@ let state = {
   view: 'tasks',
   taskMode: 'open',
   data: isDemo ? EMPTY_DATA : { ...EMPTY_DATA, ...readJson(DATA_CACHE_KEY, {}) },
-  hiddenCourses: readJson(HIDDEN_COURSES_KEY, []),
+  push: { support: isDemo ? 'demo' : pushSupport(), enabled: false, busy: false, error: null },
   calendar: { year: today.getFullYear(), month: today.getMonth(), selectedKey: dayKey(today) },
   notice: null,
   loginError: null,
@@ -61,17 +62,23 @@ function allRows() {
   ];
 }
 
-function visibleTasks() {
-  return openTasks(allRows(), state.hiddenCourses);
+function savedCourses() {
+  return state.data.userCourses.filter((course) => !course.deleted_at);
 }
 
-function liveCourses() {
-  return state.data.userCourses.filter((course) => !course.deleted_at && !course.is_hidden);
+// Hidden courses are saved on the server (not just on this phone), so the
+// Chrome extension and the notifications respect the same choice.
+function hiddenCourses() {
+  return savedCourses().filter((course) => course.is_hidden).map((course) => course.course_name);
+}
+
+function visibleTasks() {
+  return openTasks(allRows(), hiddenCourses());
 }
 
 /** Every course name we know: from tasks, plus ones saved for progress tracking. */
 function courseNames() {
-  const names = [...allCourses(allRows()), ...liveCourses().map((course) => course.course_name)];
+  const names = [...allCourses(allRows()), ...savedCourses().map((course) => course.course_name)];
   return [...new Set(names)].sort((a, b) => a.localeCompare(b, 'he'));
 }
 
@@ -83,6 +90,7 @@ async function refresh() {
     const data = await store.load();
     if (!isDemo) localStorage.setItem(DATA_CACHE_KEY, JSON.stringify(data));
     setState({ data, notice: null, lastUpdated: updatedFormatter.format(new Date()) });
+    await moveLocalHiddenCoursesToServer();
   } catch (err) {
     if (err.status === UNAUTHORIZED) {
       setState({ signedIn: false, loginError: 'צריך להתחבר מחדש.' });
@@ -204,11 +212,44 @@ function addToCalendar(row) {
 }
 
 function toggleCourse(name, visible) {
-  const hiddenCourses = visible
-    ? state.hiddenCourses.filter((course) => course !== name)
-    : [...new Set([...state.hiddenCourses, name])];
-  localStorage.setItem(HIDDEN_COURSES_KEY, JSON.stringify(hiddenCourses));
-  setState({ hiddenCourses });
+  return saveCourse({ course_name: name, is_hidden: !visible });
+}
+
+// Earlier versions kept hidden courses on the phone only. Move them once.
+async function moveLocalHiddenCoursesToServer() {
+  const local = readJson(HIDDEN_COURSES_KEY, []);
+  if (isDemo || local.length === 0) return;
+  localStorage.removeItem(HIDDEN_COURSES_KEY);
+  for (const name of local) {
+    await saveCourse({ course_name: name, is_hidden: true });
+  }
+}
+
+// ---------- notifications ----------
+
+async function loadPushState() {
+  if (state.push.support !== SUPPORT_OK) return;
+  try {
+    const device = await currentSubscription();
+    setState({ push: { ...state.push, enabled: !!device } });
+  } catch (err) {
+    setState({ push: { ...state.push, error: `לא הצלחתי לבדוק את מצב ההתראות (${err.message}).` } });
+  }
+}
+
+async function togglePush(enable) {
+  setState({ push: { ...state.push, busy: true, error: null } });
+  try {
+    if (enable) {
+      await store.saveDevice(await subscribe());
+    } else {
+      const endpoint = await unsubscribe();
+      if (endpoint) await store.removeDevice(endpoint);
+    }
+    setState({ push: { ...state.push, support: pushSupport(), enabled: enable, busy: false } });
+  } catch (err) {
+    setState({ push: { ...state.push, support: pushSupport(), busy: false, error: `לא הצלחתי (${err.message}).` } });
+  }
 }
 
 // ---------- rendering ----------
@@ -243,8 +284,8 @@ function currentScreen() {
     });
   }
   if (state.view === 'progress') {
-    const hidden = new Set(state.hiddenCourses);
-    const saved = new Map(liveCourses().map((course) => [course.course_name, course]));
+    const hidden = new Set(hiddenCourses());
+    const saved = new Map(savedCourses().map((course) => [course.course_name, course]));
     return progressScreen({
       courses: courseNames().filter((name) => !hidden.has(name)).map((name) => ({ name, course: saved.get(name) || null })),
       cells: state.data.cells,
@@ -260,11 +301,12 @@ function currentScreen() {
     const session = api.currentSession();
     return settingsScreen({
       courses: courseNames(),
-      hiddenCourses: state.hiddenCourses,
+      hiddenCourses: hiddenCourses(),
       email: session && session.email,
       lastUpdated: state.lastUpdated,
       demo: isDemo,
-      handlers: { onToggleCourse: toggleCourse, onRefresh: refresh, onSignOut: signOut },
+      push: state.push,
+      handlers: { onToggleCourse: toggleCourse, onRefresh: refresh, onSignOut: signOut, onTogglePush: togglePush },
     });
   }
   const demoNotice = isDemo ? 'מצב הדגמה: מטלות מומצאות, שום דבר לא נשמר.' : null;
@@ -298,6 +340,7 @@ function render() {
 
 render();
 refresh();
+loadPushState();
 
 // Keep countdowns current (only where they are shown, so typing and
 // scrolling elsewhere are never interrupted), and refetch on return.
