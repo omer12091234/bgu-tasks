@@ -1,10 +1,13 @@
-// Sign-in and data access for the phone app, straight over Supabase's REST
-// API (no SDK, so the app stays tiny and loads fast on mobile data).
+// Sign-in and data access, straight over Supabase's REST API (no SDK, so
+// the app stays tiny and loads fast on mobile data). Used by the phone app
+// and by the Chrome extension (popup and background worker).
 
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
+import { createSessionStore } from './session-store.js';
 
-const SESSION_KEY = 'bgu-tasks.session';
 const REFRESH_MARGIN_MS = 60 * 1000;
+const sessionStore = createSessionStore();
+let session = null; // in-memory copy, filled by init()
 
 export class ApiError extends Error {
   constructor(message, status) {
@@ -14,17 +17,15 @@ export class ApiError extends Error {
   }
 }
 
-function readSession() {
-  try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-  } catch (_err) {
-    return null;
-  }
+/** Load the saved session. Call once at start, before currentSession(). */
+export async function init() {
+  session = await sessionStore.load();
+  return session;
 }
 
-function writeSession(session) {
-  if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  else localStorage.removeItem(SESSION_KEY);
+async function writeSession(next) {
+  session = next;
+  await sessionStore.save(next);
 }
 
 function toSession(body) {
@@ -62,8 +63,9 @@ async function request(path, { method = 'GET', token = null, body = null, header
   return data;
 }
 
+/** The session loaded by init() or set by signIn(); null when signed out. */
 export function currentSession() {
-  return readSession();
+  return session;
 }
 
 export async function signIn(email, password) {
@@ -71,19 +73,20 @@ export async function signIn(email, password) {
     method: 'POST',
     body: { email: String(email).trim(), password },
   });
-  const session = toSession(body);
-  writeSession(session);
+  await writeSession(toSession(body));
   return session;
 }
 
-export function signOut() {
-  writeSession(null);
+export async function signOut() {
+  await writeSession(null);
 }
 
 // A valid access token, refreshed when it is about to expire. Throws an
 // ApiError with status 401 when the user has to sign in again.
 async function accessToken() {
-  const session = readSession();
+  // Re-read first: another part of the app (the extension's background
+  // worker, another tab) may have refreshed the session since we loaded it.
+  session = await sessionStore.load();
   if (!session) throw new ApiError('לא מחובר', 401);
   if (session.expiresAt - Date.now() > REFRESH_MARGIN_MS) return session.accessToken;
 
@@ -92,12 +95,11 @@ async function accessToken() {
       method: 'POST',
       body: { refresh_token: session.refreshToken },
     });
-    const next = toSession(body);
-    writeSession(next);
-    return next.accessToken;
+    await writeSession(toSession(body));
+    return session.accessToken;
   } catch (err) {
     if (err.status === 0) throw err; // offline: keep the session, try later
-    writeSession(null);
+    await writeSession(null);
     throw new ApiError('פג תוקף ההתחברות', 401);
   }
 }

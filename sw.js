@@ -1,7 +1,7 @@
 // Service worker: lets the app open instantly and offline, and shows
 // deadline notifications pushed from the hourly cloud check.
 
-const CACHE = 'bgu-tasks-shell-v7';
+const CACHE = 'bgu-tasks-shell-v8';
 // Notifications received on this phone, for the app to show (see inbox.js;
 // keep these constants in step with it).
 const INBOX_CACHE = 'bgu-tasks-inbox';
@@ -17,6 +17,7 @@ const SHELL = [
   'store.js',
   'push.js',
   'inbox.js',
+  'session-store.js',
   'api.js',
   'config.js',
   'demo-data.js',

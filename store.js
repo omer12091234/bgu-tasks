@@ -3,9 +3,12 @@
 
 import * as api from './api.js';
 import { demoRows } from './demo-data.js';
+import { isExtension } from './session-store.js';
 
 const TASK_KIND = 'task'; // the Chrome extension's kind for plain to-dos
-export const ORIGIN = 'app'; // changes made here are not pushed back to this phone
+// Where a change was made. The phone is notified about changes made in the
+// extension, and not about its own.
+export const ORIGIN = isExtension() ? 'extension' : 'app';
 
 function newId() {
   return globalThis.crypto.randomUUID();
@@ -15,14 +18,15 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function newTask({ title, course_name, deadline }, userId) {
+/** A new row for the `tasks` table. */
+export function newTask({ title, course_name, deadline, link = null }, userId) {
   const now = nowIso();
   return {
     id: newId(),
     user_id: userId,
     kind: TASK_KIND,
     title: String(title).trim(),
-    link: null,
+    link,
     course_name: course_name || null,
     deadline: deadline || null,
     done: false,

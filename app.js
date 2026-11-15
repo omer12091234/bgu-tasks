@@ -10,6 +10,7 @@ import { tasksScreen, calendarScreen, settingsScreen, loginScreen, taskDialog, t
 import { progressScreen } from './ui-progress.js';
 import { pushSupport, currentSubscription, subscribe, unsubscribe, SUPPORT_OK } from './push.js';
 import { readInbox, clearInbox } from './inbox.js';
+import { isExtension } from './session-store.js';
 
 const HIDDEN_COURSES_KEY = 'bgu-tasks.hiddenCourses';
 const DATA_CACHE_KEY = 'bgu-tasks.data';
@@ -21,7 +22,9 @@ const EMPTY_DATA = { submissions: [], tasks: [], userCourses: [], cells: [] };
 const urlParams = new URLSearchParams(location.search);
 const isDemo = urlParams.has('demo');
 const NOTIFICATION_PARAM = 'n'; // set by the service worker when a notification is tapped
+const inExtension = isExtension(); // running as the Chrome extension's popup
 const store = isDemo ? createDemoStore() : createRemoteStore();
+await api.init();
 const appNode = document.getElementById('app');
 const tabsNode = document.getElementById('tabs');
 const toastNode = document.getElementById('toast');
@@ -41,7 +44,7 @@ let state = {
   view: 'tasks',
   taskMode: 'open',
   data: isDemo ? EMPTY_DATA : { ...EMPTY_DATA, ...readJson(DATA_CACHE_KEY, {}) },
-  push: { support: isDemo ? 'demo' : pushSupport(), enabled: false, busy: false, error: null },
+  push: { support: isDemo ? 'demo' : (inExtension ? 'extension' : pushSupport()), enabled: false, busy: false, error: null },
   calendar: { year: today.getFullYear(), month: today.getMonth(), selectedKey: dayKey(today) },
   notice: null,
   inbox: [],                                              // notifications received on this phone
@@ -118,8 +121,8 @@ async function signIn(email, password) {
   }
 }
 
-function signOut() {
-  api.signOut();
+async function signOut() {
+  await api.signOut();
   localStorage.removeItem(DATA_CACHE_KEY);
   setState({ signedIn: false, data: EMPTY_DATA, view: 'tasks' });
 }
@@ -399,6 +402,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-if (!isDemo && 'serviceWorker' in navigator) {
+if (!isDemo && !inExtension && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch((err) => console.warn('[app] offline support unavailable', err));
 }
