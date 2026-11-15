@@ -1,7 +1,7 @@
 // Screen builders. Every function takes plain data + callbacks and returns
 // DOM nodes; none of them touches the network or storage.
 
-import { dueTime, countdown, formatDue, dayKey } from './lib/time.js';
+import { dueTime, countdown, formatDue, dayKey, combineDateTime, toDateTimeFields, quickDueOptions } from './lib/time.js';
 import { courseName, groupByDay, isManual } from './lib/tasks.js';
 import { monthGrid } from './lib/calendar.js';
 
@@ -132,13 +132,67 @@ export function tasksScreen({ tasks, history, mode, now, notice, inbox, handlers
  * "New task" dialog. Course is optional: the first option means a general
  * task that belongs to no course.
  */
+const NO_DUE_TEXT = 'בלי מועד. משימה בלי מועד לא מקבלת תזכורת.';
+
+/**
+ * Deadline picker for a new task: one-tap shortcuts, a date field and a time
+ * field, and a line that always says what will be saved. The chosen moment
+ * is tracked here as it changes rather than read from the fields at the
+ * end, because some phones hand back an empty combined date-time field.
+ */
+function duePicker() {
+  let dueMs = null;
+  const dateField = el('input', { type: 'date', name: 'due-date', 'aria-label': 'תאריך' });
+  const timeField = el('input', { type: 'time', name: 'due-time', 'aria-label': 'שעה' });
+  const preview = el('p', { class: 'due-preview', 'aria-live': 'polite', text: NO_DUE_TEXT });
+
+  const show = () => {
+    preview.textContent = dueMs == null ? NO_DUE_TEXT : `יישמר: ${formatDue(dueMs)} (${countdown(dueMs, Date.now()).text})`;
+    preview.dataset.set = String(dueMs != null);
+  };
+  const setDue = (ms) => {
+    dueMs = ms;
+    const fields = ms == null ? { date: '', time: '' } : toDateTimeFields(ms);
+    dateField.value = fields.date;
+    timeField.value = fields.time;
+    show();
+  };
+  const readFields = () => {
+    dueMs = combineDateTime(dateField.value, timeField.value);
+    show();
+  };
+  for (const field of [dateField, timeField]) {
+    field.addEventListener('input', readFields);
+    field.addEventListener('change', readFields);
+  }
+
+  const node = el('fieldset', { class: 'due-picker' }, [
+    el('legend', { text: 'מועד (לא חובה)' }),
+    el('div', { class: 'chips' }, [
+      ...quickDueOptions(Date.now()).map((option) => el('button', {
+        class: 'chip', type: 'button', text: option.label, onclick: () => setDue(option.ms),
+      })),
+      el('button', { class: 'chip', type: 'button', text: 'בלי מועד', onclick: () => setDue(null) }),
+    ]),
+    el('div', { class: 'due-fields' }, [dateField, timeField]),
+    preview,
+  ]);
+  // Read the fields once more on demand, in case a phone changed them
+  // without firing an event.
+  return { node, value: () => { readFields(); return dueMs; } };
+}
+
+/**
+ * "New task" dialog. Course is optional: the first option means a general
+ * task that belongs to no course.
+ */
 export function taskDialog({ courses, onSubmit }) {
   const title = el('input', { type: 'text', name: 'title', required: true, maxlength: '200', autocomplete: 'off' });
   const course = el('select', { name: 'course' }, [
     el('option', { value: GENERAL_COURSE, text: 'כללי (בלי קורס)' }),
     ...courses.map((name) => el('option', { value: name, text: name })),
   ]);
-  const due = el('input', { type: 'datetime-local', name: 'due' });
+  const due = duePicker();
   const dialog = el('dialog', { class: 'sheet', 'aria-label': 'משימה חדשה' });
   // Close and remove in one step: relying on the dialog's own "close" event
   // to clean up left stale dialogs behind in some browsers.
@@ -152,10 +206,11 @@ export function taskDialog({ courses, onSubmit }) {
     onsubmit: (event) => {
       event.preventDefault();
       if (!title.value.trim()) return;
+      const dueMs = due.value();
       onSubmit({
         title: title.value,
         course_name: course.value || null,
-        deadline: due.value ? new Date(due.value).toISOString() : null,
+        deadline: dueMs == null ? null : new Date(dueMs).toISOString(),
       });
       dismiss();
     },
@@ -163,7 +218,7 @@ export function taskDialog({ courses, onSubmit }) {
     el('h2', { class: 'sheet-title', text: 'משימה חדשה' }),
     el('label', { class: 'field field-rtl' }, [document.createTextNode('מה צריך לעשות'), title]),
     el('label', { class: 'field field-rtl' }, [document.createTextNode('קורס'), course]),
-    el('label', { class: 'field field-rtl' }, [document.createTextNode('מועד (לא חובה)'), due]),
+    due.node,
     el('div', { class: 'task-actions' }, [
       el('button', { class: 'btn btn-primary', type: 'submit', text: 'הוסף' }),
       el('button', { class: 'btn', type: 'button', text: 'ביטול', onclick: dismiss }),
