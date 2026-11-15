@@ -347,6 +347,7 @@ const TABS = [
   { id: 'tasks', label: 'מטלות', glyph: '☰' },
   { id: 'calendar', label: 'לוח שנה', glyph: '▦' },
   { id: 'progress', label: 'התקדמות', glyph: '◔' },
+  { id: 'stats', label: 'נתונים', glyph: '▥' },
   { id: 'settings', label: 'הגדרות', glyph: '⚙' },
 ];
 

@@ -8,6 +8,7 @@ import { buildIcs, icsFileName } from './lib/ics.js';
 import { dayKey } from './lib/time.js';
 import { tasksScreen, calendarScreen, settingsScreen, loginScreen, taskDialog, tabBar, el } from './ui.js';
 import { progressScreen } from './ui-progress.js';
+import { statsScreen } from './ui-stats.js';
 import { pushSupport, currentSubscription, subscribe, unsubscribe, SUPPORT_OK } from './push.js';
 import { readInbox, clearInbox } from './inbox.js';
 import { isExtension } from './session-store.js';
@@ -17,7 +18,7 @@ const DATA_CACHE_KEY = 'bgu-tasks.data';
 const COUNTDOWN_REFRESH_MS = 30 * 1000;
 const UNDO_WINDOW_MS = 6 * 1000;
 const UNAUTHORIZED = 401;
-const EMPTY_DATA = { submissions: [], tasks: [], userCourses: [], cells: [] };
+const EMPTY_DATA = { submissions: [], tasks: [], userCourses: [], cells: [], study: [], watched: [], times: [] };
 
 const urlParams = new URLSearchParams(location.search);
 const isDemo = urlParams.has('demo');
@@ -331,6 +332,16 @@ function currentScreen() {
         onToggle: toggleSession,
         onAddCourse: (name) => saveCourse({ course_name: name }),
       },
+    });
+  }
+  if (state.view === 'stats') {
+    return statsScreen({
+      study: state.data.study,
+      watched: state.data.watched,
+      times: state.data.times,
+      tasks: state.data.tasks,
+      submissions: state.data.submissions,
+      now,
     });
   }
   if (state.view === 'settings') {

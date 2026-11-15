@@ -6,6 +6,7 @@ import { demoRows } from './demo-data.js';
 import { isExtension } from './session-store.js';
 
 const TASK_KIND = 'task'; // the Chrome extension's kind for plain to-dos
+const NOT_DELETED = 'deleted_at=is.null';
 // Where a change was made. The phone is notified about changes made in the
 // extension, and not about its own.
 export const ORIGIN = isExtension() ? 'extension' : 'app';
@@ -81,15 +82,18 @@ export function createRemoteStore() {
 
   return {
     async load() {
-      const [submissions, tasks, courses, trackerCells] = await Promise.all([
+      const [submissions, tasks, courses, trackerCells, study, watched, times] = await Promise.all([
         api.selectAll('submissions'),
         api.selectAll('tasks', `kind=eq.${TASK_KIND}`),
         api.selectAll('user_courses'),
         api.selectAll('tracker_cells'),
+        api.selectAll('study_sessions', NOT_DELETED),
+        api.selectAll('watched_videos', NOT_DELETED),
+        api.selectAll('video_times', NOT_DELETED),
       ]);
       userCourses = courses;
       cells = trackerCells;
-      return { submissions, tasks, userCourses, cells };
+      return { submissions, tasks, userCourses, cells, study, watched, times };
     },
     patchSubmission: (id, fields) => api.patch('submissions', id, { ...fields, updated_at: nowIso() }),
     patchTask: (id, fields) => api.patch('tasks', id, { ...fields, updated_at: nowIso() }),
@@ -118,7 +122,7 @@ export function createRemoteStore() {
 
 export function createDemoStore() {
   const DEMO_USER = 'demo-user';
-  let data = { submissions: demoRows(), tasks: [], userCourses: [], cells: [] };
+  let data = { submissions: demoRows(), tasks: [], userCourses: [], cells: [], study: [], watched: [], times: [] };
   const patchIn = (list, id, fields) => list.map((row) => (row.id === id ? { ...row, ...fields } : row));
 
   return {
