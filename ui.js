@@ -41,7 +41,7 @@ function taskCard(row, now, handlers) {
   const { text, level } = countdown(due, now);
   const meta = [courseName(row), formatDue(due)].filter(Boolean).join(' · ');
 
-  return el('li', { class: 'task', 'data-level': level }, [
+  return el('li', { class: 'task', 'data-level': level, 'data-highlight': handlers.highlightId === row.id ? 'true' : null }, [
     el('p', { class: 'task-countdown', text }),
     isManual(row) && el('span', { class: 'tag', text: 'אישית' }),
     el('h2', { class: 'task-name', text: row.name || 'ללא שם' }),
@@ -87,7 +87,24 @@ function taskList(tasks, now, handlers) {
   return el('ul', { class: 'task-list' }, tasks.map((row) => taskCard(row, now, handlers)));
 }
 
-export function tasksScreen({ tasks, history, mode, now, notice, handlers }) {
+const inboxTimeFormatter = new Intl.DateTimeFormat('he-IL', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+
+// Notifications that arrived on this phone, shown until dismissed.
+function inboxPanel(inbox, onDismiss) {
+  return el('section', { class: 'panel inbox', 'aria-label': 'התראות שהתקבלו' }, [
+    el('div', { class: 'course-head' }, [
+      el('h2', { text: inbox.length === 1 ? 'התראה שהתקבלה' : `${inbox.length} התראות שהתקבלו` }),
+      el('button', { class: 'link-btn', type: 'button', text: 'סגור', onclick: onDismiss }),
+    ]),
+    ...inbox.map((item) => el('div', { class: 'inbox-item' }, [
+      el('strong', { text: item.title }),
+      item.body && el('p', { class: 'inbox-body', text: item.body }),
+      el('span', { class: 'inbox-time', text: inboxTimeFormatter.format(new Date(item.at)) }),
+    ])),
+  ]);
+}
+
+export function tasksScreen({ tasks, history, mode, now, notice, inbox, handlers }) {
   const title = tasks.length === 0
     ? [document.createTextNode('אין מטלות פתוחות')]
     : [el('span', { class: 'count', text: String(tasks.length) }), document.createTextNode(tasks.length === 1 ? ' מטלה פתוחה' : ' מטלות פתוחות')];
@@ -102,6 +119,7 @@ export function tasksScreen({ tasks, history, mode, now, notice, handlers }) {
   return [
     pageHead(todayFormatter.format(new Date(now)), title),
     notice && el('p', { class: 'banner', text: notice }),
+    inbox.length > 0 && inboxPanel(inbox, handlers.onDismissInbox),
     el('div', { class: 'toolbar' }, [
       segment(mode, handlers.onMode, { open: tasks.length, history: history.length }),
       el('button', { class: 'btn btn-add', type: 'button', text: '+ משימה', onclick: handlers.onAdd }),

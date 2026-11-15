@@ -1,7 +1,12 @@
 // Service worker: lets the app open instantly and offline, and shows
 // deadline notifications pushed from the hourly cloud check.
 
-const CACHE = 'bgu-tasks-shell-v5';
+const CACHE = 'bgu-tasks-shell-v6';
+// Notifications received on this phone, for the app to show (see inbox.js;
+// keep these constants in step with it).
+const INBOX_CACHE = 'bgu-tasks-inbox';
+const INBOX_URL = 'inbox.json';
+const INBOX_MAX_ITEMS = 20;
 const SHELL = [
   './',
   'index.html',
@@ -11,6 +16,7 @@ const SHELL = [
   'ui-progress.js',
   'store.js',
   'push.js',
+  'inbox.js',
   'api.js',
   'config.js',
   'demo-data.js',
@@ -33,7 +39,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE && key !== INBOX_CACHE).map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   );
 });
@@ -66,20 +72,40 @@ self.addEventListener('push', (event) => {
   } catch (_err) {
     payload = { title: 'מטלות BGU', body: event.data ? event.data.text() : '' };
   }
-  event.waitUntil(self.registration.showNotification(payload.title || 'מטלות BGU', {
+  const title = payload.title || 'מטלות BGU';
+  const item = { title, body: payload.body || '', tag: payload.tag || '', at: Date.now() };
+  event.waitUntil(Promise.all([addToInbox(item), self.registration.showNotification(title, {
     body: payload.body || '',
     tag: payload.tag,
+    data: { tag: payload.tag || '' },
     icon: 'icons/icon-192.png',
     badge: 'icons/icon-192.png',
     dir: 'rtl',
     lang: 'he',
-  }));
+  })]));
 });
+
+async function addToInbox(item) {
+  try {
+    const cache = await caches.open(INBOX_CACHE);
+    const stored = await cache.match(INBOX_URL);
+    const list = stored ? await stored.json() : [];
+    const next = [item, ...list].slice(0, INBOX_MAX_ITEMS);
+    await cache.put(INBOX_URL, new Response(JSON.stringify(next), { headers: { 'Content-Type': 'application/json' } }));
+  } catch (_err) {
+    // Showing the notification matters more than keeping a copy of it.
+  }
+}
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(self.clients.matchAll({ type: 'window' }).then((clients) => {
+  const tag = (event.notification.data && event.notification.data.tag) || '';
+  // Open the app on the task the notification is about: tell an open app
+  // which one, or start the app with it in the address.
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
     const open = clients.find((client) => 'focus' in client);
-    return open ? open.focus() : self.clients.openWindow('./');
+    if (!open) return self.clients.openWindow(`./?n=${encodeURIComponent(tag)}`);
+    open.postMessage({ type: 'notification-click', tag });
+    return open.focus();
   }));
 });

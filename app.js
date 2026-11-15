@@ -9,6 +9,7 @@ import { dayKey } from './lib/time.js';
 import { tasksScreen, calendarScreen, settingsScreen, loginScreen, taskDialog, tabBar, el } from './ui.js';
 import { progressScreen } from './ui-progress.js';
 import { pushSupport, currentSubscription, subscribe, unsubscribe, SUPPORT_OK } from './push.js';
+import { readInbox, clearInbox } from './inbox.js';
 
 const HIDDEN_COURSES_KEY = 'bgu-tasks.hiddenCourses';
 const DATA_CACHE_KEY = 'bgu-tasks.data';
@@ -17,7 +18,9 @@ const UNDO_WINDOW_MS = 6 * 1000;
 const UNAUTHORIZED = 401;
 const EMPTY_DATA = { submissions: [], tasks: [], userCourses: [], cells: [] };
 
-const isDemo = new URLSearchParams(location.search).has('demo');
+const urlParams = new URLSearchParams(location.search);
+const isDemo = urlParams.has('demo');
+const NOTIFICATION_PARAM = 'n'; // set by the service worker when a notification is tapped
 const store = isDemo ? createDemoStore() : createRemoteStore();
 const appNode = document.getElementById('app');
 const tabsNode = document.getElementById('tabs');
@@ -41,6 +44,8 @@ let state = {
   push: { support: isDemo ? 'demo' : pushSupport(), enabled: false, busy: false, error: null },
   calendar: { year: today.getFullYear(), month: today.getMonth(), selectedKey: dayKey(today) },
   notice: null,
+  inbox: [],                                              // notifications received on this phone
+  highlightId: urlParams.get(NOTIFICATION_PARAM) || null, // task a tapped notification points at
   loginError: null,
   busy: false,
   lastUpdated: null,
@@ -257,6 +262,28 @@ async function togglePush(enable) {
   }
 }
 
+// ---------- received notifications ----------
+
+async function loadInbox() {
+  setState({ inbox: await readInbox() });
+}
+
+async function dismissInbox() {
+  await clearInbox();
+  setState({ inbox: [], highlightId: null });
+}
+
+// A notification was tapped while the app was already open.
+function onNotificationTapped(tag) {
+  setState({ view: 'tasks', taskMode: 'open', highlightId: tag || null });
+  loadInbox();
+}
+
+function scrollToHighlight() {
+  const card = document.querySelector('.task[data-highlight="true"]');
+  if (card) card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
 // ---------- rendering ----------
 
 function showToast(message, actionLabel, onAction) {
@@ -271,7 +298,7 @@ function showToast(message, actionLabel, onAction) {
 }
 
 function currentScreen() {
-  const taskHandlers = { onDone: markDone, onCalendar: addToCalendar, onDelete: deleteTask };
+  const taskHandlers = { onDone: markDone, onCalendar: addToCalendar, onDelete: deleteTask, highlightId: state.highlightId };
   const now = Date.now();
 
   if (state.view === 'calendar') {
@@ -321,8 +348,10 @@ function currentScreen() {
     mode: state.taskMode,
     now,
     notice: state.notice || demoNotice,
+    inbox: state.inbox,
     handlers: {
       ...taskHandlers,
+      onDismissInbox: dismissInbox,
       onRestore: (row) => setDone(row, false),
       onMode: (taskMode) => setState({ taskMode }),
       onAdd: openTaskDialog,
@@ -344,8 +373,9 @@ function render() {
 // ---------- start ----------
 
 render();
-refresh();
+refresh().then(scrollToHighlight);
 loadPushState();
+loadInbox();
 
 // Keep countdowns current (only where they are shown, so typing and
 // scrolling elsewhere are never interrupted), and refetch on return.
@@ -353,7 +383,20 @@ setInterval(() => {
   const showsCountdowns = state.view === 'tasks' || state.view === 'calendar';
   if (state.signedIn && showsCountdowns && !document.querySelector('dialog[open]')) render();
 }, COUNTDOWN_REFRESH_MS);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  refresh();
+  loadInbox();
+});
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'notification-click') {
+      onNotificationTapped(event.data.tag);
+      scrollToHighlight();
+    }
+  });
+}
 
 if (!isDemo && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch((err) => console.warn('[app] offline support unavailable', err));

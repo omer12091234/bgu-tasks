@@ -368,6 +368,16 @@ html, body { overflow-x: hidden; }
 .task-finished::before { background: var(--moss); }
 .task-finished .task-name { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--line); }
 
+/* ---------- received notifications ---------- */
+
+.inbox { border-color: var(--ember); background: var(--ember-wash); }
+.inbox-item { padding-block: 10px; border-block-start: 1px solid color-mix(in srgb, var(--ember) 25%, transparent); }
+.inbox-item strong { display: block; }
+.inbox .inbox-body { margin: 2px 0 0; color: var(--ink); white-space: pre-line; }
+.inbox-time { color: var(--ink-soft); font-size: 0.78rem; }
+
+.task[data-highlight='true'] { outline: 3px solid var(--ember); outline-offset: 2px; }
+
 /* ---------- new-task sheet ---------- */
 
 .sheet {
