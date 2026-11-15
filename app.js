@@ -106,6 +106,7 @@ async function signIn(email, password) {
     await api.signIn(email, password);
     setState({ signedIn: true, busy: false });
     await refresh();
+    await loadPushState();
   } catch (err) {
     const message = /invalid login/i.test(err.message) ? 'אימייל או סיסמה שגויים.' : `ההתחברות נכשלה: ${err.message}`;
     setState({ busy: false, loginError: message });
@@ -231,9 +232,13 @@ async function loadPushState() {
   if (state.push.support !== SUPPORT_OK) return;
   try {
     const device = await currentSubscription();
+    // The phone can be registered with the push service while the server
+    // never heard about it (a failed save, a reinstall). Saving again on
+    // every start is harmless and keeps the two in step.
+    if (device && state.signedIn) await store.saveDevice(device);
     setState({ push: { ...state.push, enabled: !!device } });
   } catch (err) {
-    setState({ push: { ...state.push, error: `לא הצלחתי לבדוק את מצב ההתראות (${err.message}).` } });
+    setState({ push: { ...state.push, enabled: false, error: `ההתראות לא נרשמו בשרת (${err.message}). נסה להפעיל שוב.` } });
   }
 }
 

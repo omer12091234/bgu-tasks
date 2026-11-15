@@ -1,7 +1,7 @@
 // Service worker: lets the app open instantly and offline, and shows
 // deadline notifications pushed from the hourly cloud check.
 
-const CACHE = 'bgu-tasks-shell-v4';
+const CACHE = 'bgu-tasks-shell-v5';
 const SHELL = [
   './',
   'index.html',
