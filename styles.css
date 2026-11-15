@@ -64,6 +64,14 @@ button, input { font: inherit; color: inherit; }
 
 button { cursor: pointer; }
 
+/* iPhone Safari zooms the whole page in whenever a focused field's text is
+   smaller than 16px, and stays zoomed. Keep every field at 16px or more. */
+input, select, textarea { font-size: max(16px, 1rem); }
+
+.field input, .field select { width: 100%; min-width: 0; max-width: 100%; }
+
+html, body { overflow-x: hidden; }
+
 :focus-visible { outline: 3px solid var(--ember); outline-offset: 2px; }
 
 #app {
@@ -385,7 +393,7 @@ button { cursor: pointer; }
   border-radius: 12px;
   background: var(--surface);
   color: var(--ink);
-  font: inherit;
+  font-family: inherit;
 }
 
 .field-rtl input { direction: rtl; }
