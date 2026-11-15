@@ -1,7 +1,7 @@
 // App shell: holds the state, talks to the store, and re-renders screens.
 
 import * as api from './api.js';
-import { createRemoteStore, createDemoStore } from './store.js';
+import { createRemoteStore, createDemoStore, ORIGIN } from './store.js';
 import { openTasks, allCourses, historyItems, fromManualTask, isManual, SOURCE_MOODLE } from './lib/tasks.js';
 import { shiftMonth } from './lib/calendar.js';
 import { buildIcs, icsFileName } from './lib/ics.js';
@@ -154,7 +154,8 @@ function changeTask(row, manualFields, moodleFields) {
 
 function setDone(row, done) {
   const at = done ? new Date().toISOString() : null;
-  return changeTask(row, { done, done_at: at }, { manual_done: done, manual_done_at: at });
+  const doneFrom = done ? ORIGIN : null;
+  return changeTask(row, { done, done_at: at, done_from: doneFrom }, { manual_done: done, manual_done_at: at, done_from: doneFrom });
 }
 
 // Deleting a manual task removes it; "deleting" a Moodle assignment hides

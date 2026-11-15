@@ -5,6 +5,7 @@ import * as api from './api.js';
 import { demoRows } from './demo-data.js';
 
 const TASK_KIND = 'task'; // the Chrome extension's kind for plain to-dos
+export const ORIGIN = 'app'; // changes made here are not pushed back to this phone
 
 function newId() {
   return globalThis.crypto.randomUUID();
@@ -27,6 +28,8 @@ function newTask({ title, course_name, deadline }, userId) {
     done: false,
     done_at: null,
     added_at: now,
+    created_from: ORIGIN,
+    done_from: null,
     updated_at: now,
   };
 }
